@@ -1,0 +1,127 @@
+-- SERVIÇOS
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- PLAYER / CAMERA
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- CONFIG
+local AIM_RADIUS = 150
+local ESP_COLOR = Color3.fromRGB(255, 0, 0)
+
+-- VARIÁVEIS
+local aiming = false
+local espEnabled = false
+local espObjects = {}
+
+-- ===== INPUT =====
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		aiming = true
+	end
+
+	if input.KeyCode == Enum.KeyCode.P then
+		espEnabled = not espEnabled
+		if not espEnabled then
+			for _, esp in pairs(espObjects) do
+				if esp then esp:Destroy() end
+			end
+			espObjects = {}
+		end
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		aiming = false
+	end
+end)
+
+-- ===== TEAM CHECK =====
+local function isEnemy(model)
+	local targetPlayer = Players:GetPlayerFromCharacter(model)
+	if targetPlayer then
+		-- Player: verifica time
+		if targetPlayer.Team == player.Team then
+			return false
+		end
+	end
+	-- NPC ou player inimigo
+	return true
+end
+
+-- ===== PEGA ALVO MAIS PRÓXIMO =====
+local function getClosestTarget()
+	local closest = nil
+	local shortest = AIM_RADIUS
+
+	for _, model in ipairs(workspace:GetChildren()) do
+		if model:IsA("Model")
+			and model:FindFirstChild("Humanoid")
+			and model:FindFirstChild("Head")
+			and model ~= player.Character
+			and isEnemy(model) then
+
+			local pos, visible = camera:WorldToViewportPoint(model.Head.Position)
+			if visible then
+				local dist = (
+					Vector2.new(pos.X, pos.Y)
+					- Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+				).Magnitude
+
+				if dist < shortest then
+					shortest = dist
+					closest = model
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+-- ===== ESP =====
+local function createESP(target)
+	if espObjects[target] then return end
+
+	local highlight = Instance.new("Highlight")
+	highlight.FillTransparency = 1
+	highlight.OutlineColor = ESP_COLOR
+	highlight.OutlineTransparency = 0
+	highlight.Adornee = target
+	highlight.Parent = target
+
+	espObjects[target] = highlight
+end
+
+-- ===== LOOP =====
+RunService.RenderStepped:Connect(function()
+	-- AIMBOT
+	if aiming then
+		local target = getClosestTarget()
+		if target and target:FindFirstChild("Head") then
+			camera.CFrame = CFrame.new(
+				camera.CFrame.Position,
+				target.Head.Position
+			)
+		end
+	end
+
+	-- ESP
+	if espEnabled then
+		for _, model in ipairs(workspace:GetChildren()) do
+			if model:IsA("Model")
+				and model:FindFirstChild("Humanoid")
+				and model:FindFirstChild("Head")
+				and model ~= player.Character
+				and isEnemy(model) then
+
+				createESP(model)
+			end
+		end
+	end
+end)
